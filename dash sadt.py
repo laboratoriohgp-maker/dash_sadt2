@@ -443,11 +443,20 @@ if uploaded is not None:
         d["PERIODO_DIA"] = d["HORA"].apply(classificar_periodo).astype("category")
         
         # Cálculo de tempo entre pedido e realização
-        if "DATA_PEDIDO" in d.columns:
+        if "DATA_PEDIDO" in d.columns and "DATA_REALIZACAO" in d.columns:
             d["DELTA_PEDIDO_REALIZ"] = d["DATA_REALIZACAO"] - d["DATA_PEDIDO"]
+
+            # Garante que valores inválidos não quebrem o cálculo
+            d["DELTA_PEDIDO_REALIZ"] = pd.to_timedelta(d["DELTA_PEDIDO_REALIZ"], errors="coerce")
+
+            # Converte para horas e dias
             d["DELTA_HORAS"] = d["DELTA_PEDIDO_REALIZ"].dt.total_seconds() / 3600.0
             d["DELTA_DIAS"] = d["DELTA_PEDIDO_REALIZ"].dt.days
-        
+        else:
+            d["DELTA_PEDIDO_REALIZ"] = pd.NaT
+            d["DELTA_HORAS"] = None
+            d["DELTA_DIAS"] = None
+
         return d
 
     # Processa os dados

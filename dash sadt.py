@@ -307,7 +307,14 @@ if uploaded is not None:
     def advanced_preprocess(df):
         """Pré-processamento avançado dos dados"""
         d = df.copy()
-        
+
+        # -------------------------------
+        # Conversão de colunas de datas
+        # -------------------------------
+        for col in ["DATA_PEDIDO", "DATA_REALIZACAO"]:
+            if col in d.columns:
+                d[col] = pd.to_datetime(d[col], errors="coerce", dayfirst=True)
+
         # Parse de datas
         d["DATA_REALIZACAO"] = parse_excel_dates(d[col_mappings["DATA_REALIZ"]])
         if col_mappings["DATA_PEDIDO"]:

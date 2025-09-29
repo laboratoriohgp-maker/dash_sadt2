@@ -283,7 +283,7 @@ if uploaded is not None:
         "LOCAL": find_col(df_raw, ["LOCAL", "PROCEDENCIA", "UNIDADE"]),
         "TECNICO": find_col(df_raw, ["TECNICO", "OPERADOR"]),
         "MEDICO": find_col(df_raw, ["MEDICO", "RADIOLOGISTA", "LAUDO"]),
-        "TEMPO_ESTIMADO": find_col(df_raw, ["TEMPO_ESTIMADO", "TEMPO ESPERA", "TEMPO_PREVISTO"])
+        "TEMPO_ESTIMADO": find_col(df_raw, ["TEMPO ESTIMADO", "TEMPO ESPERA", "TEMPO_PREVISTO"])
     }
     
     # Mostra status do mapeamento

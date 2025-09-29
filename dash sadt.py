@@ -709,9 +709,11 @@ if uploaded is not None:
 
     with tab2:
         st.markdown("### ⏱️ **Análise Temporal Detalhada**")
-        
+    
         if "TEMPO_ESTIMADO_HORAS" in df_filtered.columns and df_filtered["TEMPO_ESTIMADO_HORAS"].gt(0).any():
             df_tempo = df_filtered[df_filtered["TEMPO_ESTIMADO_HORAS"] > 0].copy()
+        
+            # Filtragem de outliers
             Q1 = df_tempo["TEMPO_ESTIMADO_HORAS"].quantile(0.25)
             Q3 = df_tempo["TEMPO_ESTIMADO_HORAS"].quantile(0.75)
             IQR = Q3 - Q1
@@ -721,13 +723,13 @@ if uploaded is not None:
             )
             df_tempo = df_tempo[filtro_outliers].copy()
 
+            # Métricas principais
             tempo_mediano = df_tempo["TEMPO_ESTIMADO_HORAS"].median()
             tempo_media = df_tempo["TEMPO_ESTIMADO_HORAS"].mean()
             tempo_p95 = df_tempo["TEMPO_ESTIMADO_HORAS"].quantile(0.95)
             tempo_max = df_tempo["TEMPO_ESTIMADO_HORAS"].max()
 
             col1, col2, col3, col4 = st.columns(4)
-            
             with col1:
                 st.markdown(create_advanced_metrics_card(
                     "Tempo Estimado Mediano", 
@@ -735,7 +737,6 @@ if uploaded is not None:
                     "50% dos exames",
                     color="#2ca02c"
                 ), unsafe_allow_html=True)
-            
             with col2:
                 st.markdown(create_advanced_metrics_card(
                     "Tempo Estimado Médio", 
@@ -743,7 +744,6 @@ if uploaded is not None:
                     "Média geral",
                     color="#ff7f0e"
                 ), unsafe_allow_html=True)
-            
             with col3:
                 st.markdown(create_advanced_metrics_card(
                     "Percentil 95", 
@@ -751,7 +751,6 @@ if uploaded is not None:
                     "95% dos exames",
                     color="#d62728"
                 ), unsafe_allow_html=True)
-            
             with col4:
                 st.markdown(create_advanced_metrics_card(
                     "Tempo Estimado Máximo", 
@@ -759,29 +758,23 @@ if uploaded is not None:
                     "Maior espera",
                     color="#9467bd"
                 ), unsafe_allow_html=True)
-            
-            # Análise diária de tempos de espera
+
+            # Análise diária
             st.markdown("#### 📊 **Análise Diária de Tempos de Espera**")
-            
-            # Tempo médio por dia
             tempo_diario = df_tempo.groupby(df_tempo["DATA_REALIZACAO"].dt.date).agg({
                 "TEMPO_ESTIMADO_HORAS": ["median", "mean", "max", "count"]
             }).round(2)
-            
             tempo_diario.columns = ["Mediana", "Media", "Maximo", "Quantidade"]
             tempo_diario = tempo_diario.reset_index()
-            
-            # Tempo mediano por grupo por dia
+        
             tempo_grupo_dia = df_tempo.groupby([
                 df_tempo["DATA_REALIZACAO"].dt.date, 
                 "GRUPO_EXAME"
             ])["TEMPO_ESTIMADO_HORAS"].median().reset_index()
-            
-            # Gráficos de análise temporal
+        
+            # Gráficos
             col1, col2 = st.columns(2)
-            
             with col1:
-                # Evolução da mediana diária
                 fig_tempo_dia = px.line(
                     tempo_diario,
                     x="DATA_REALIZACAO",
@@ -790,19 +783,14 @@ if uploaded is not None:
                     template=template,
                     labels={"Mediana": "Tempo Mediano (horas)", "DATA_REALIZACAO": "Data"}
                 )
-                
-                # Adicionar média geral como linha de referência
                 fig_tempo_dia.add_hline(
                     y=tempo_mediano, 
                     line_dash="dash", 
                     line_color="red", 
                     annotation_text=f"Mediana Geral: {format_duration(tempo_mediano)}"
                 )
-                
                 st.plotly_chart(fig_tempo_dia, use_container_width=True)
-            
             with col2:
-                # Tempo máximo por dia (paciente com maior espera)
                 fig_max_dia = px.line(
                     tempo_diario,
                     x="DATA_REALIZACAO",
@@ -811,16 +799,14 @@ if uploaded is not None:
                     template=template,
                     labels={"Maximo": "Tempo Máximo (horas)", "DATA_REALIZACAO": "Data"}
                 )
-                
                 st.plotly_chart(fig_max_dia, use_container_width=True)
-            
-            # Mediana de espera por grupo
+
+            # Mediana por grupo
             mediana_grupo = df_tempo.groupby("GRUPO_EXAME")["TEMPO_ESTIMADO_HORAS"].agg([
                 "median", "mean", "max", "count"
             ]).round(2)
             mediana_grupo.columns = ["Mediana_h", "Media_h", "Maximo_h", "Quantidade"]
             mediana_grupo = mediana_grupo.sort_values("Mediana_h", ascending=True).reset_index()
-            
             fig_grupo_tempo = px.bar(
                 mediana_grupo,
                 x="Mediana_h",
@@ -832,29 +818,23 @@ if uploaded is not None:
             )
             fig_grupo_tempo.update_layout(yaxis={'categoryorder':'total ascending'})
             st.plotly_chart(fig_grupo_tempo, use_container_width=True)
-            
-            # Tabela detalhada com pacientes de maior espera por dia
+
+            # Tabela de pacientes com maior espera
             st.markdown("#### 📋 **Pacientes com Maior Tempo de Espera por Dia**")
-            
-            # Identificar o paciente com maior tempo de espera por dia
             pacientes_max_espera = df_tempo.loc[
                 df_tempo.groupby(df_tempo["DATA_REALIZACAO"].dt.date)["TEMPO_ESTIMADO_HORAS"].idxmax()
             ][["DATA_REALIZACAO", "PACIENTE_ID", "EXAME_NORM", "TEMPO_ESTIMADO_HORAS"]].copy()
-
             pacientes_max_espera["DATA"] = pacientes_max_espera["DATA_REALIZACAO"].dt.date
             pacientes_max_espera["TEMPO_FORMATADO"] = pacientes_max_espera["TEMPO_ESTIMADO_HORAS"].apply(format_duration)
-
             tabela_max_espera = pacientes_max_espera[[
                 "DATA", "PACIENTE_ID", "EXAME_NORM", "TEMPO_FORMATADO"
             ]].sort_values("DATA", ascending=False)
             tabela_max_espera.columns = ["Data", "Paciente", "Exame", "Tempo Estimado"]
-
             st.dataframe(tabela_max_espera.head(20), use_container_width=True)
             st.caption("Mostrando os 20 dias mais recentes")
-            
-            # Análise mensal de tempos
+
+            # Análise mensal
             st.markdown("#### 📅 **Análise Mensal de Tempos de Espera**")
-            
             df_tempo["Ano_Mes"] = df_tempo["DATA_REALIZACAO"].dt.to_period("M")
             tempo_mensal = df_tempo.groupby("Ano_Mes")["TEMPO_ESTIMADO_HORAS"].agg([
                 "median", "mean", "count"
@@ -862,9 +842,8 @@ if uploaded is not None:
             tempo_mensal.columns = ["Mediana_h", "Media_h", "Quantidade"]
             tempo_mensal = tempo_mensal.reset_index()
             tempo_mensal["Ano_Mes_str"] = tempo_mensal["Ano_Mes"].astype(str)
-            
+        
             col1, col2 = st.columns(2)
-            
             with col1:
                 fig_mensal = px.line(
                     tempo_mensal,
@@ -875,20 +854,17 @@ if uploaded is not None:
                     labels={"Mediana_h": "Tempo Mediano (horas)", "Ano_Mes_str": "Mês"}
                 )
                 st.plotly_chart(fig_mensal, use_container_width=True)
-            
             with col2:
-                # Tabela resumo mensal
                 st.markdown("**📊 Resumo Mensal**")
                 tempo_mensal_display = tempo_mensal.copy()
                 tempo_mensal_display["Mediana_Formatada"] = tempo_mensal_display["Mediana_h"].apply(format_duration)
                 tempo_mensal_display["Media_Formatada"] = tempo_mensal_display["Media_h"].apply(format_duration)
-                
                 resumo_mensal = tempo_mensal_display[[
                     "Ano_Mes_str", "Mediana_Formatada", "Media_Formatada", "Quantidade"
                 ]]
                 resumo_mensal.columns = ["Mês", "Mediana", "Média", "Exames"]
                 st.dataframe(resumo_mensal, use_container_width=True)
-            
+
             # Insights temporais
             insights_tempo = generate_insights(df_filtered, "temporal")
             if insights_tempo:
@@ -898,74 +874,57 @@ if uploaded is not None:
                     {"<br>".join(insights_tempo)}
                 </div>
                 """, unsafe_allow_html=True)
-        
-        else:
-            st.warning("⚠️ **Análise temporal não disponível**: Não foram encontradas colunas de data de pedido para calcular tempos de espera.")
-            
-        # Análise de sazonalidade
-        st.markdown("#### 📅 **Análise de Sazonalidade**")
-        
-        # Heatmap por hora e dia da semana
-        df_heatmap = df_filtered.groupby(["DIA_SEMANA", "HORA"]).size().reset_index(name="Quantidade")
-        
-        # Criar matriz para heatmap
-        heatmap_matrix = df_heatmap.pivot(index="DIA_SEMANA", columns="HORA", values="Quantidade").fillna(0)
-        
-        # Labels dos dias da semana
-        dias_semana = ["Segunda", "Terça", "Quarta", "Quinta", "Sexta", "Sábado", "Domingo"]
-        heatmap_matrix.index = [dias_semana[i] for i in heatmap_matrix.index]
-        
-        fig_heatmap = px.imshow(
-            heatmap_matrix,
-            title="🔥 **Heatmap: Exames por Hora e Dia da Semana**",
-            template=template,
-            aspect="auto",
-            color_continuous_scale="Blues"
-        )
-        fig_heatmap.update_layout(
-            xaxis_title="Hora do Dia",
-            yaxis_title="Dia da Semana"
-        )
-        
-        st.plotly_chart(fig_heatmap, use_container_width=True)
-        
-        # Análise por período do dia
-        col1, col2 = st.columns(2)
-        
-        with col1:
-            periodo_dist = df_filtered["PERIODO_DIA"].value_counts().reset_index()
-            periodo_dist.columns = ["Período", "Quantidade"]
-            
-            fig_periodo = px.bar(
-                periodo_dist,
-                x="Período",
-                y="Quantidade",
-                title="🌅 **Distribuição por Período do Dia**",
-                template=template,
-                color="Quantidade",
-                color_continuous_scale="viridis"
-            )
-            st.plotly_chart(fig_periodo, use_container_width=True)
-        
-        with col2:
-            # Análise mensal
-            df_mensal = df_filtered.copy()
-            df_mensal["Mes_Nome"] = df_mensal["DATA_REALIZACAO"].dt.strftime("%B")
-            mensal_dist = df_mensal["Mes_Nome"].value_counts().reset_index()
-            mensal_dist.columns = ["Mês", "Quantidade"]
-            
-            fig_mensal = px.bar(
-                mensal_dist,
-                x="Mês",
-                y="Quantidade",
-                title="📅 **Distribuição Mensal**",
-                template=template,
-                color="Quantidade",
-                color_continuous_scale="plasma"
-            )
-            fig_mensal.update_xaxes(tickangle=45)
-            st.plotly_chart(fig_mensal, use_container_width=True)
+
+            else:
+                st.warning("⚠️ **Análise temporal não disponível**: Não há valores válidos de tempo estimado para calcular a análise.")
     
+            # -------- Análise de sazonalidade --------
+            st.markdown("#### 📅 **Análise de Sazonalidade**")
+            df_heatmap = df_filtered.groupby(["DIA_SEMANA", "HORA"]).size().reset_index(name="Quantidade")
+            heatmap_matrix = df_heatmap.pivot(index="DIA_SEMANA", columns="HORA", values="Quantidade").fillna(0)
+            dias_semana = ["Segunda", "Terça", "Quarta", "Quinta", "Sexta", "Sábado", "Domingo"]
+            heatmap_matrix.index = [dias_semana[i] for i in heatmap_matrix.index]
+            fig_heatmap = px.imshow(
+                heatmap_matrix,
+                title="🔥 **Heatmap: Exames por Hora e Dia da Semana**",
+                template=template,
+                aspect="auto",
+                color_continuous_scale="Blues"
+            )
+            fig_heatmap.update_layout(xaxis_title="Hora do Dia", yaxis_title="Dia da Semana")
+            st.plotly_chart(fig_heatmap, use_container_width=True)
+
+            # Distribuição por período do dia e mensal
+            col1, col2 = st.columns(2)
+            with col1:
+                periodo_dist = df_filtered["PERIODO_DIA"].value_counts().reset_index()
+                periodo_dist.columns = ["Período", "Quantidade"]
+                fig_periodo = px.bar(
+                    periodo_dist,
+                    x="Período",
+                    y="Quantidade",
+                    title="🌅 **Distribuição por Período do Dia**",
+                    template=template,
+                    color="Quantidade",
+                    color_continuous_scale="viridis"
+                )
+                st.plotly_chart(fig_periodo, use_container_width=True)
+            with col2:
+                df_mensal = df_filtered.copy()
+                df_mensal["Mes_Nome"] = df_mensal["DATA_REALIZACAO"].dt.strftime("%B")
+                mensal_dist = df_mensal["Mes_Nome"].value_counts().reset_index()
+                mensal_dist.columns = ["Mês", "Quantidade"]
+                fig_mensal = px.bar(
+                    mensal_dist,
+                    x="Mês",
+                    y="Quantidade",
+                    title="📅 **Distribuição Mensal**",
+                    template=template,
+                    color="Quantidade",
+                    color_continuous_scale="plasma"
+                )
+                fig_mensal.update_xaxes(tickangle=45)
+                st.plotly_chart(fig_mensal, use_container_width=True)
     with tab3:
         st.markdown("### 👥 **Análise de Pacientes**")
         

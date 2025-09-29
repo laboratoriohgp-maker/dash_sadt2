@@ -193,8 +193,8 @@ def generate_insights(df, analysis_type="general"):
             insights.append("⚡ **Alta variabilidade**: Demanda oscila muito entre dias (CV > 30%)")
     
     elif analysis_type == "temporal":
-        if "DELTA_HORAS" in df.columns:
-            tempo_medio = df["DELTA_HORAS"].median()  # Usar mediana em vez de média
+        if "TEMPO_ESTIMADO_HORAS" in df.columns:
+            tempo_medio = df["TEMPO_ESTIMADO_HORAS"].median()  # Usar mediana em vez de média
             if tempo_medio > 72:  # 3 dias
                 insights.append("⏰ **Tempo de espera elevado**: Mediana superior a 3 dias entre pedido e realização")
             elif tempo_medio < 24:  # 1 dia
@@ -283,6 +283,7 @@ if uploaded is not None:
         "LOCAL": find_col(df_raw, ["LOCAL", "PROCEDENCIA", "UNIDADE"]),
         "TECNICO": find_col(df_raw, ["TECNICO", "OPERADOR"]),
         "MEDICO": find_col(df_raw, ["MEDICO", "RADIOLOGISTA", "LAUDO"])
+        "TEMPO_ESTIMADO": find_col(df_raw, ["TEMPO_ESTIMADO", "TEMPO ESPERA", "TEMPO_PREVISTO"])
     }
     
     # Mostra status do mapeamento
@@ -449,20 +450,13 @@ if uploaded is not None:
         
         d["PERIODO_DIA"] = d["HORA"].apply(classificar_periodo).astype("category")
         
-        # Cálculo de tempo entre pedido e realização
-        if "DATA_PEDIDO" in d.columns and "DATA_REALIZACAO" in d.columns:
-            d["DELTA_PEDIDO_REALIZ"] = d["DATA_REALIZACAO"] - d["DATA_PEDIDO"]
-
-            # Garante que valores inválidos não quebrem o cálculo
-            d["DELTA_PEDIDO_REALIZ"] = pd.to_timedelta(d["DELTA_PEDIDO_REALIZ"], errors="coerce")
-
-            # Converte para horas e dias
-            d["DELTA_HORAS"] = d["DELTA_PEDIDO_REALIZ"].dt.total_seconds() / 3600.0
-            d["DELTA_DIAS"] = d["DELTA_PEDIDO_REALIZ"].dt.days
+        # Tempo estimado já fornecido na planilha
+        if col_mappings["TEMPO_ESTIMADO"]:
+            d["TEMPO_ESTIMADO_HORAS"] = pd.to_numeric(
+                d[col_mappings["TEMPO_ESTIMADO"]], errors="coerce"
+            )
         else:
-            d["DELTA_PEDIDO_REALIZ"] = pd.NaT
-            d["DELTA_HORAS"] = None
-            d["DELTA_DIAS"] = None
+            d["TEMPO_ESTIMADO_HORAS"] = None
 
         return d
 
@@ -707,30 +701,27 @@ if uploaded is not None:
     with tab2:
         st.markdown("### ⏱️ **Análise Temporal Detalhada**")
         
-        # Análise de tempo de espera (se disponível)
-        if "DELTA_HORAS" in df_filtered.columns and not df_filtered["DELTA_HORAS"].isna().all():
-            # Remove outliers extremos para análise mais realista
-            df_tempo = df_filtered[df_filtered["DELTA_HORAS"] > 0].copy()
-            Q1 = df_tempo["DELTA_HORAS"].quantile(0.25)
-            Q3 = df_tempo["DELTA_HORAS"].quantile(0.75)
+        if "TEMPO_ESTIMADO_HORAS" in df_filtered.columns and not df_filtered["TEMPO_ESTIMADO_HORAS"].isna().all():
+            df_tempo = df_filtered[df_filtered["TEMPO_ESTIMADO_HORAS"] > 0].copy()
+            Q1 = df_tempo["TEMPO_ESTIMADO_HORAS"].quantile(0.25)
+            Q3 = df_tempo["TEMPO_ESTIMADO_HORAS"].quantile(0.75)
             IQR = Q3 - Q1
             filtro_outliers = (
-                (df_tempo["DELTA_HORAS"] >= Q1 - 1.5 * IQR) &
-                (df_tempo["DELTA_HORAS"] <= Q3 + 1.5 * IQR)
+                (df_tempo["TEMPO_ESTIMADO_HORAS"] >= Q1 - 1.5 * IQR) &
+                (df_tempo["TEMPO_ESTIMADO_HORAS"] <= Q3 + 1.5 * IQR)
             )
             df_tempo = df_tempo[filtro_outliers].copy()
-            
-            # Métricas de tempo mais relevantes
-            tempo_mediano = df_tempo["DELTA_HORAS"].median()
-            tempo_media = df_tempo["DELTA_HORAS"].mean()
-            tempo_p95 = df_tempo["DELTA_HORAS"].quantile(0.95)
-            tempo_max = df_tempo["DELTA_HORAS"].max()
-            
+
+            tempo_mediano = df_tempo["TEMPO_ESTIMADO_HORAS"].median()
+            tempo_media = df_tempo["TEMPO_ESTIMADO_HORAS"].mean()
+            tempo_p95 = df_tempo["TEMPO_ESTIMADO_HORAS"].quantile(0.95)
+            tempo_max = df_tempo["TEMPO_ESTIMADO_HORAS"].max()
+
             col1, col2, col3, col4 = st.columns(4)
             
             with col1:
                 st.markdown(create_advanced_metrics_card(
-                    "Tempo Mediano", 
+                    "Tempo Estimado Mediano", 
                     format_duration(tempo_mediano),
                     "50% dos exames",
                     color="#2ca02c"
@@ -738,7 +729,7 @@ if uploaded is not None:
             
             with col2:
                 st.markdown(create_advanced_metrics_card(
-                    "Tempo Médio", 
+                    "Tempo Estimado Médio", 
                     format_duration(tempo_media),
                     "Média geral",
                     color="#ff7f0e"
@@ -754,7 +745,7 @@ if uploaded is not None:
             
             with col4:
                 st.markdown(create_advanced_metrics_card(
-                    "Tempo Máximo", 
+                    "Tempo Estimado Máximo", 
                     format_duration(tempo_max),
                     "Maior espera",
                     color="#9467bd"
@@ -765,7 +756,7 @@ if uploaded is not None:
             
             # Tempo médio por dia
             tempo_diario = df_tempo.groupby(df_tempo["DATA_REALIZACAO"].dt.date).agg({
-                "DELTA_HORAS": ["median", "mean", "max", "count"]
+                "TEMPO_ESTIMADO_HORAS": ["median", "mean", "max", "count"]
             }).round(2)
             
             tempo_diario.columns = ["Mediana", "Media", "Maximo", "Quantidade"]
@@ -775,7 +766,7 @@ if uploaded is not None:
             tempo_grupo_dia = df_tempo.groupby([
                 df_tempo["DATA_REALIZACAO"].dt.date, 
                 "GRUPO_EXAME"
-            ])["DELTA_HORAS"].median().reset_index()
+            ])["TEMPO_ESTIMADO_HORAS"].median().reset_index()
             
             # Gráficos de análise temporal
             col1, col2 = st.columns(2)
@@ -815,7 +806,7 @@ if uploaded is not None:
                 st.plotly_chart(fig_max_dia, use_container_width=True)
             
             # Mediana de espera por grupo
-            mediana_grupo = df_tempo.groupby("GRUPO_EXAME")["DELTA_HORAS"].agg([
+            mediana_grupo = df_tempo.groupby("GRUPO_EXAME")["TEMPO_ESTIMADO_HORAS"].agg([
                 "median", "mean", "max", "count"
             ]).round(2)
             mediana_grupo.columns = ["Mediana_h", "Media_h", "Maximo_h", "Quantidade"]
@@ -838,17 +829,17 @@ if uploaded is not None:
             
             # Identificar o paciente com maior tempo de espera por dia
             pacientes_max_espera = df_tempo.loc[
-                df_tempo.groupby(df_tempo["DATA_REALIZACAO"].dt.date)["DELTA_HORAS"].idxmax()
-            ][["DATA_REALIZACAO", "PACIENTE_ID", "EXAME_NORM", "DELTA_HORAS"]].copy()
-            
+                df_tempo.groupby(df_tempo["DATA_REALIZACAO"].dt.date)["TEMPO_ESTIMADO_HORAS"].idxmax()
+            ][["DATA_REALIZACAO", "PACIENTE_ID", "EXAME_NORM", "TEMPO_ESTIMADO_HORAS"]].copy()
+
             pacientes_max_espera["DATA"] = pacientes_max_espera["DATA_REALIZACAO"].dt.date
-            pacientes_max_espera["TEMPO_FORMATADO"] = pacientes_max_espera["DELTA_HORAS"].apply(format_duration)
-            
+            pacientes_max_espera["TEMPO_FORMATADO"] = pacientes_max_espera["TEMPO_ESTIMADO_HORAS"].apply(format_duration)
+
             tabela_max_espera = pacientes_max_espera[[
                 "DATA", "PACIENTE_ID", "EXAME_NORM", "TEMPO_FORMATADO"
             ]].sort_values("DATA", ascending=False)
-            tabela_max_espera.columns = ["Data", "Paciente", "Exame", "Tempo de Espera"]
-            
+            tabela_max_espera.columns = ["Data", "Paciente", "Exame", "Tempo Estimado"]
+
             st.dataframe(tabela_max_espera.head(20), use_container_width=True)
             st.caption("Mostrando os 20 dias mais recentes")
             
@@ -856,7 +847,7 @@ if uploaded is not None:
             st.markdown("#### 📅 **Análise Mensal de Tempos de Espera**")
             
             df_tempo["Ano_Mes"] = df_tempo["DATA_REALIZACAO"].dt.to_period("M")
-            tempo_mensal = df_tempo.groupby("Ano_Mes")["DELTA_HORAS"].agg([
+            tempo_mensal = df_tempo.groupby("Ano_Mes")["TEMPO_ESTIMADO_HORAS"].agg([
                 "median", "mean", "count"
             ]).round(2)
             tempo_mensal.columns = ["Mediana_h", "Media_h", "Quantidade"]
@@ -1303,13 +1294,13 @@ if uploaded is not None:
     with tab2:
         st.markdown("### ⏱️ Análise Temporal Detalhada")
 
-        if "DELTA_HORAS" in df_filtered.columns and not df_filtered["DELTA_HORAS"].isna().all():
-            df_tempo = df_filtered[df_filtered["DELTA_HORAS"] > 0].copy()
+        if "TEMPO_ESTIMADO_HORAS" in df_filtered.columns and not df_filtered["TEMPO_ESTIMADO_HORAS"].isna().all():
+            df_tempo = df_filtered[df_filtered["TEMPO_ESTIMADO_HORAS"] > 0].copy()
 
             # 2.1 Mediana de espera por dia (toda a frota)
             mediana_diaria = (
                 df_tempo
-                .groupby(df_tempo["DATA_REALIZACAO"].dt.date)["DELTA_HORAS"]
+                .groupby(df_tempo["DATA_REALIZACAO"].dt.date)["TEMPO_ESTIMADO_HORAS"]
                 .median()
                 .reset_index(name="Mediana_h")
             )
@@ -1333,7 +1324,7 @@ if uploaded is not None:
             # 2.2 Máximo de espera por dia e tabela de pacientes
             max_diaria = (
                 df_tempo
-                .groupby(df_tempo["DATA_REALIZACAO"].dt.date)["DELTA_HORAS"]
+                .groupby(df_tempo["DATA_REALIZACAO"].dt.date)["TEMPO_ESTIMADO_HORAS"]
                 .max()
                 .reset_index(name="Maximo_h")
             )
@@ -1352,11 +1343,11 @@ if uploaded is not None:
             # Tabela com data, paciente e exame que teve a maior espera
             pacientes_max = (
                 df_tempo
-                .loc[df_tempo.groupby(df_tempo["DATA_REALIZACAO"].dt.date)["DELTA_HORAS"].idxmax()]
-                [["DATA_REALIZACAO", "PACIENTE_ID", "EXAME_NORM", "DELTA_HORAS"]]
+                .loc[df_tempo.groupby(df_tempo["DATA_REALIZACAO"].dt.date)["TEMPO_ESTIMADO_HORAS"].idxmax()]
+                [["DATA_REALIZACAO", "PACIENTE_ID", "EXAME_NORM", "TEMPO_ESTIMADO_HORAS"]]
             )
             pacientes_max["DATA"]          = pacientes_max["DATA_REALIZACAO"].dt.date
-            pacientes_max["TEMPO_FORMATADO"] = pacientes_max["DELTA_HORAS"].apply(format_duration)
+            pacientes_max["TEMPO_FORMATADO"] = pacientes_max["TEMPO_ESTIMADO_HORAS"].apply(format_duration)
 
             tabela_max = pacientes_max[["DATA", "PACIENTE_ID", "EXAME_NORM", "TEMPO_FORMATADO"]]
             tabela_max.columns = ["Data", "Paciente", "Exame", "Tempo de Espera"]
@@ -1365,12 +1356,12 @@ if uploaded is not None:
 
 
             # 2.3 Métrica global e mensal de espera
-            espera_global   = df_tempo["DELTA_HORAS"].mean()
+            espera_global   = df_tempo["TEMPO_ESTIMADO_HORAS"].mean()
             st.markdown(f"**⏳ Tempo Médio Global de Espera:** {format_duration(espera_global)}")
 
             espera_mensal = (
                 df_tempo
-                .groupby(df_tempo["DATA_REALIZACAO"].dt.to_period("M"))["DELTA_HORAS"]
+                .groupby(df_tempo["DATA_REALIZACAO"].dt.to_period("M"))["TEMPO_ESTIMADO_HORAS"]
                 .mean()
                 .reset_index(name="Media_h")
             )
@@ -1598,8 +1589,8 @@ if uploaded is not None:
                     reincidencia.to_excel(writer, sheet_name='Analise_Pacientes', index=False)
                 
                 # Aba com métricas temporais se disponível
-                if 'DELTA_HORAS' in df_filtered.columns:
-                    tempo_resumo = df_filtered.groupby('GRUPO_EXAME')['DELTA_HORAS'].agg(['mean', 'median', 'std']).round(2)
+                if 'TEMPO_ESTIMADO_HORAS' in df_filtered.columns:
+                    tempo_resumo = df_filtered.groupby('GRUPO_EXAME')['TEMPO_ESTIMADO_HORAS'].agg(['mean', 'median', 'std']).round(2)
                     tempo_resumo.columns = ['Tempo_Medio_h', 'Tempo_Mediano_h', 'Desvio_Padrao_h']
                     tempo_resumo.to_excel(writer, sheet_name='Analise_Temporal')
                 
@@ -1655,13 +1646,13 @@ if uploaded is not None:
             if 'pacientes_acima_limite' in locals() and len(pacientes_acima_limite) > 0:
                 summary += f"**⚠️ Pacientes acima limite (1mSv):** {len(pacientes_acima_limite)}\n"
             
-            if 'DELTA_HORAS' in df_filtered.columns and not df_filtered['DELTA_HORAS'].isna().all():
-                tempo_medio_geral = df_filtered['DELTA_HORAS'].mean()
+            if 'TEMPO_ESTIMADO_HORAS' in df_filtered.columns and not df_filtered['TEMPO_ESTIMADO_HORAS'].isna().all():
+                tempo_medio_geral = df_filtered['TEMPO_ESTIMADO_HORAS'].mean()
                 summary += f"""
 
 ## ⏱️ TEMPO DE RESPOSTA
 **Tempo médio pedido→realização:** {tempo_medio_geral:.1f} horas
-**Tempo mediano:** {df_filtered['DELTA_HORAS'].median():.1f} horas
+**Tempo mediano:** {df_filtered['TEMPO_ESTIMADO_HORAS'].median():.1f} horas
 """
             
             summary += f"""
@@ -1681,7 +1672,7 @@ if uploaded is not None:
             all_insights = []
             all_insights.extend(generate_insights(df_filtered, "volume"))
             all_insights.extend(generate_insights(df_filtered, "efficiency"))
-            if 'DELTA_HORAS' in df_filtered.columns:
+            if 'TEMPO_ESTIMADO_HORAS' in df_filtered.columns:
                 all_insights.extend(generate_insights(df_filtered, "temporal"))
             
             for insight in all_insights:

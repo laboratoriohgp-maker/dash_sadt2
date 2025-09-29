@@ -710,7 +710,7 @@ if uploaded is not None:
     with tab2:
         st.markdown("### ⏱️ **Análise Temporal Detalhada**")
         
-        if "TEMPO_ESTIMADO_HORAS" in df_filtered.columns and not df_filtered["TEMPO_ESTIMADO_HORAS"].isna().all():
+        if "TEMPO_ESTIMADO_HORAS" in df_filtered.columns and df_filtered["TEMPO_ESTIMADO_HORAS"].gt(0).any():
             df_tempo = df_filtered[df_filtered["TEMPO_ESTIMADO_HORAS"] > 0].copy()
             Q1 = df_tempo["TEMPO_ESTIMADO_HORAS"].quantile(0.25)
             Q3 = df_tempo["TEMPO_ESTIMADO_HORAS"].quantile(0.75)
@@ -901,7 +901,7 @@ if uploaded is not None:
         
         else:
             st.warning("⚠️ **Análise temporal não disponível**: Não foram encontradas colunas de data de pedido para calcular tempos de espera.")
-        
+            
         # Análise de sazonalidade
         st.markdown("#### 📅 **Análise de Sazonalidade**")
         
@@ -1303,7 +1303,7 @@ if uploaded is not None:
     with tab2:
         st.markdown("### ⏱️ Análise Temporal Detalhada")
 
-        if "TEMPO_ESTIMADO_HORAS" in df_filtered.columns and not df_filtered["TEMPO_ESTIMADO_HORAS"].isna().all():
+        if "TEMPO_ESTIMADO_HORAS" in df_filtered.columns and df_filtered["TEMPO_ESTIMADO_HORAS"].gt(0).any():
             df_tempo = df_filtered[df_filtered["TEMPO_ESTIMADO_HORAS"] > 0].copy()
 
             # 2.1 Mediana de espera por dia (toda a frota)
@@ -1387,7 +1387,8 @@ if uploaded is not None:
             st.plotly_chart(fig_espera_mes, use_container_width=True)
 
         else:
-            st.warning("⚠️ Não há DELTA_HORAS para análise temporal.")
+            st.warning("⚠️ **Análise temporal não disponível**: Não há valores válidos de tempo estimado para calcular a análise.")
+
 
         # -----------------------------------------
         # 3) RODAPÉ DE REFERÊNCIA EM Gráfico de Dose

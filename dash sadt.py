@@ -316,11 +316,14 @@ if uploaded is not None:
             if col in d.columns:
                 d[col] = pd.to_datetime(d[col], errors="coerce", dayfirst=True)
 
-        # Parse de datas
-        d["DATA_REALIZACAO"] = parse_excel_dates(d[col_mappings["DATA_REALIZ"]])
-        if col_mappings["DATA_PEDIDO"]:
-            d["DATA_PEDIDO"] = parse_excel_dates(d[col_mappings["DATA_PEDIDO"]])
-        
+        # Tempo estimado já fornecido na planilha
+        if col_mappings["TEMPO_ESTIMADO"]:
+            d["TEMPO_ESTIMADO_HORAS"] = pd.to_numeric(
+                d[col_mappings["TEMPO_ESTIMADO"]], errors="coerce"
+            )
+        else:
+            d["TEMPO_ESTIMADO_HORAS"] = None
+
         # ID do paciente mais robusto
         if col_mappings["NOME"] and col_mappings["ATEND"]:
             d["PACIENTE_ID"] = (d[col_mappings["ATEND"]].astype(str).str.strip() + 
@@ -337,6 +340,7 @@ if uploaded is not None:
                           .str.upper().str.strip()
                           .str.replace(r"[^\w\s]", " ", regex=True)
                           .str.replace(r"\s+", " ", regex=True))
+        
         
         # Classificação inteligente de grupos
         def classificar_grupo_avancado(exame):
@@ -1950,7 +1954,7 @@ else:
         'ENCAMINHAMENTO': ['CLINICA GERAL', 'GASTRO', 'CLINICA GERAL'],
         'TECNICO': ['TEC001', 'TEC002', 'TEC001'],
         'MEDICO': ['DR. SILVA', 'DR. SANTOS', 'DR. SILVA'],
-        "TEMPO_ESTIMADO": ['0.01:55:00', '1.00:45:02', '0.22:43:53']
+        'TEMPO_ESTIMADO': ['0.01:55:00', '1.00:45:02', '0.22:43:53']
     })
     
     st.dataframe(exemplo_df, use_container_width=True)

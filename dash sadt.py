@@ -1949,7 +1949,8 @@ else:
         'EXAME': ['RX TORAX PA', 'TC ABDOME', 'US ABDOME'],
         'ENCAMINHAMENTO': ['CLINICA GERAL', 'GASTRO', 'CLINICA GERAL'],
         'TECNICO': ['TEC001', 'TEC002', 'TEC001'],
-        'MEDICO': ['DR. SILVA', 'DR. SANTOS', 'DR. SILVA']
+        'MEDICO': ['DR. SILVA', 'DR. SANTOS', 'DR. SILVA'],
+        "TEMPO_ESTIMADO": ['0.01:55:00', '1.00:45:02', '0.22:43:53']
     })
     
     st.dataframe(exemplo_df, use_container_width=True)

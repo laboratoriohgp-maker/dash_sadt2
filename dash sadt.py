@@ -310,11 +310,16 @@ if uploaded is not None:
         d = df.copy()
 
         # -------------------------------
-        # Conversão de colunas de datas
-        # -------------------------------
-        for col in ["DATA_PEDIDO", "DATA_REALIZACAO"]:
-            if col in d.columns:
-                d[col] = pd.to_datetime(d[col], errors="coerce", dayfirst=True)
+        # Parse de datas
+        if col_mappings["DATA_REALIZ"]:
+            d["DATA_REALIZACAO"] = parse_excel_dates(d[col_mappings["DATA_REALIZ"]])
+        else:
+            d["DATA_REALIZACAO"] = pd.NaT  # garante a coluna mesmo se não existir
+
+        if col_mappings["DATA_PEDIDO"]:
+            d["DATA_PEDIDO"] = parse_excel_dates(d[col_mappings["DATA_PEDIDO"]])
+        else:
+            d["DATA_PEDIDO"] = pd.NaT
 
         # Tempo estimado já fornecido na planilha
         if col_mappings["TEMPO_ESTIMADO"]:

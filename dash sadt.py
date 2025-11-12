@@ -640,7 +640,94 @@ if uploaded is not None:
     
     if encam_selecionados and col_mappings["ENCAM"]:
         df_filtered = df_filtered[df_filtered[col_mappings["ENCAM"]].isin(encam_selecionados)]
-    
+    # ============================================================
+    # 🔹 NOVA ABA: HISTÓRICO E COMPARATIVOS
+    # ============================================================
+    st.markdown("---")
+    st.markdown("## 📁 Histórico e Comparativos (GitHub)")
+
+    if "token_input" in st.session_state and "repo_input" in st.session_state:
+        token = st.session_state["token_input"]
+        repo = st.session_state["repo_input"]
+
+        historico = github_get_historico(token, repo)
+        if not historico:
+            st.info("Nenhum arquivo encontrado no repositório ainda.")
+        else:
+            st.markdown("### 🧾 Arquivos Disponíveis no GitHub")
+            df_hist = pd.DataFrame(historico)
+            df_hist["Data"] = pd.to_datetime("today").date()  # Exemplo
+            st.dataframe(df_hist[["nome_arquivo", "url"]], use_container_width=True)
+
+            nomes = [h["nome_arquivo"].replace(".xlsx","") for h in historico]
+            selecao = st.multiselect("Selecione dois ou mais arquivos para comparar", nomes)
+
+            if len(selecao) >= 2:
+                st.info(f"🔍 Comparando {len(selecao)} arquivos...")
+                dfs = []
+                for nome in selecao:
+                    caminho = f"historico_sadt/{nome}.xlsx"
+                    conteudo = github_get_file(token, repo, caminho)
+                    if conteudo:
+                        df_tmp = pd.read_excel(BytesIO(conteudo))
+                        df_tmp["Fonte_Arquivo"] = nome
+                        dfs.append(df_tmp)
+
+                if dfs:
+                    df_comp = pd.concat(dfs)
+                    st.success(f"✅ {len(df_comp):,} registros combinados para comparação")
+
+                    # -------------------------------------------------------
+                    # 📊 GRÁFICOS COMPARATIVOS AVANÇADOS
+                    # -------------------------------------------------------
+
+                    col1, col2 = st.columns(2)
+
+                    with col1:
+                        fig_exames = px.bar(
+                            df_comp.groupby("Fonte_Arquivo")["PACIENTE_ID"].count().reset_index(),
+                            x="Fonte_Arquivo", y="PACIENTE_ID",
+                            title="📈 Total de Exames por Arquivo",
+                            labels={"PACIENTE_ID": "Exames", "Fonte_Arquivo": "Arquivo"},
+                            template="plotly_white"
+                        )
+                        st.plotly_chart(fig_exames, use_container_width=True)
+
+                    with col2:
+                        fig_pacientes = px.bar(
+                            df_comp.groupby("Fonte_Arquivo")["PACIENTE_ID"].nunique().reset_index(),
+                            x="Fonte_Arquivo", y="PACIENTE_ID",
+                            title="👥 Pacientes Únicos por Arquivo",
+                            labels={"PACIENTE_ID": "Pacientes", "Fonte_Arquivo": "Arquivo"},
+                            template="plotly_white"
+                        )
+                        st.plotly_chart(fig_pacientes, use_container_width=True)
+
+                    # Média de exames/paciente
+                    metricas = (
+                        df_comp.groupby("Fonte_Arquivo")
+                        .agg(
+                            Exames=("PACIENTE_ID", "count"),
+                            Pacientes=("PACIENTE_ID", "nunique")
+                        )
+                        .assign(Media=lambda x: x["Exames"] / x["Pacientes"])
+                        .reset_index()
+                    )
+                    st.markdown("### 📊 Média de Exames por Paciente")
+                    fig_media = px.bar(metricas, x="Fonte_Arquivo", y="Media", text_auto=True, template="plotly_white")
+                    st.plotly_chart(fig_media, use_container_width=True)
+
+                    # Variação percentual entre períodos
+                    if len(metricas) >= 2:
+                        metricas["Var_%_Exames"] = metricas["Exames"].pct_change() * 100
+                        fig_var = px.line(
+                            metricas,
+                            x="Fonte_Arquivo", y="Var_%_Exames", markers=True,
+                            title="📉 Variação Percentual de Exames entre Períodos",
+                            template="plotly_white"
+                        )
+                        st.plotly_chart(fig_var, use_container_width=True)
+                        
     # ---------------------------
     # Dashboard Principal em Tabs
     # ---------------------------
@@ -2047,94 +2134,6 @@ else:
     st.dataframe(exemplo_df, use_container_width=True)
     st.caption("💡 Exemplo de estrutura de dados. O sistema detecta automaticamente variações nos nomes das colunas.")
 
-    # ============================================================
-    # 🔹 NOVA ABA: HISTÓRICO E COMPARATIVOS
-    # ============================================================
-    st.markdown("---")
-    st.markdown("## 📁 Histórico e Comparativos (GitHub)")
-
-    if "token_input" in st.session_state and "repo_input" in st.session_state:
-        token = st.session_state["token_input"]
-        repo = st.session_state["repo_input"]
-
-        historico = github_get_historico(token, repo)
-        if not historico:
-            st.info("Nenhum arquivo encontrado no repositório ainda.")
-        else:
-            st.markdown("### 🧾 Arquivos Disponíveis no GitHub")
-            df_hist = pd.DataFrame(historico)
-            df_hist["Data"] = pd.to_datetime("today").date()  # Exemplo
-            st.dataframe(df_hist[["nome_arquivo", "url"]], use_container_width=True)
-
-            nomes = [h["nome_arquivo"].replace(".xlsx","") for h in historico]
-            selecao = st.multiselect("Selecione dois ou mais arquivos para comparar", nomes)
-
-            if len(selecao) >= 2:
-                st.info(f"🔍 Comparando {len(selecao)} arquivos...")
-                dfs = []
-                for nome in selecao:
-                    caminho = f"historico_sadt/{nome}.xlsx"
-                    conteudo = github_get_file(token, repo, caminho)
-                    if conteudo:
-                        df_tmp = pd.read_excel(BytesIO(conteudo))
-                        df_tmp["Fonte_Arquivo"] = nome
-                        dfs.append(df_tmp)
-
-                if dfs:
-                    df_comp = pd.concat(dfs)
-                    st.success(f"✅ {len(df_comp):,} registros combinados para comparação")
-
-                    # -------------------------------------------------------
-                    # 📊 GRÁFICOS COMPARATIVOS AVANÇADOS
-                    # -------------------------------------------------------
-
-                    col1, col2 = st.columns(2)
-
-                    with col1:
-                        fig_exames = px.bar(
-                            df_comp.groupby("Fonte_Arquivo")["PACIENTE_ID"].count().reset_index(),
-                            x="Fonte_Arquivo", y="PACIENTE_ID",
-                            title="📈 Total de Exames por Arquivo",
-                            labels={"PACIENTE_ID": "Exames", "Fonte_Arquivo": "Arquivo"},
-                            template="plotly_white"
-                        )
-                        st.plotly_chart(fig_exames, use_container_width=True)
-
-                    with col2:
-                        fig_pacientes = px.bar(
-                            df_comp.groupby("Fonte_Arquivo")["PACIENTE_ID"].nunique().reset_index(),
-                            x="Fonte_Arquivo", y="PACIENTE_ID",
-                            title="👥 Pacientes Únicos por Arquivo",
-                            labels={"PACIENTE_ID": "Pacientes", "Fonte_Arquivo": "Arquivo"},
-                            template="plotly_white"
-                        )
-                        st.plotly_chart(fig_pacientes, use_container_width=True)
-
-                    # Média de exames/paciente
-                    metricas = (
-                        df_comp.groupby("Fonte_Arquivo")
-                        .agg(
-                            Exames=("PACIENTE_ID", "count"),
-                            Pacientes=("PACIENTE_ID", "nunique")
-                        )
-                        .assign(Media=lambda x: x["Exames"] / x["Pacientes"])
-                        .reset_index()
-                    )
-                    st.markdown("### 📊 Média de Exames por Paciente")
-                    fig_media = px.bar(metricas, x="Fonte_Arquivo", y="Media", text_auto=True, template="plotly_white")
-                    st.plotly_chart(fig_media, use_container_width=True)
-
-                    # Variação percentual entre períodos
-                    if len(metricas) >= 2:
-                        metricas["Var_%_Exames"] = metricas["Exames"].pct_change() * 100
-                        fig_var = px.line(
-                            metricas,
-                            x="Fonte_Arquivo", y="Var_%_Exames", markers=True,
-                            title="📉 Variação Percentual de Exames entre Períodos",
-                            template="plotly_white"
-                        )
-                        st.plotly_chart(fig_var, use_container_width=True)
-
     # Call to action
     st.markdown("""
     <div style="text-align: center; padding: 2rem; background: #e3f2fd; border-radius: 10px; margin: 2rem 0;">
@@ -2142,6 +2141,7 @@ else:
         <p style="font-size: 1.1em;">Faça upload do seu arquivo Excel usando o botão acima e descubra insights valiosos sobre seu centro radiológico!</p>
     </div>
     """, unsafe_allow_html=True)
+
 
 
 

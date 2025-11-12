@@ -373,11 +373,6 @@ elif opcao == "☁️ Histórico (GitHub)":
                     else:
                         st.error("❌ Falha ao carregar o arquivo do histórico.")
 
-    # Expander para visualizar dados brutos
-    with st.expander("🔍 **Visualizar dados brutos**", expanded=False):
-        st.dataframe(df_raw.head(1000), use_container_width=True)
-        st.caption(f"Mostrando até 1000 primeiras linhas de {len(df_raw):,} total")
-
     # ---------------------------
     # Mapeamento de Colunas Inteligente
     # ---------------------------
@@ -2167,6 +2162,7 @@ else:
         <p style="font-size: 1.1em;">Faça upload do seu arquivo Excel usando o botão acima e descubra insights valiosos sobre seu centro radiológico!</p>
     </div>
     """, unsafe_allow_html=True)
+
 
 
 

@@ -636,6 +636,85 @@ if uploaded is not None:
     if encam_selecionados and col_mappings["ENCAM"]:
         df_filtered = df_filtered[df_filtered[col_mappings["ENCAM"]].isin(encam_selecionados)]
     
+    st.markdown("---")
+    st.markdown("## 📁 Histórico de Arquivos e Comparativos")
+
+    token = st.secrets.get("GITHUB_TOKEN")
+    repo = st.secrets.get("GITHUB_REPO")
+
+    if not token or not repo:
+        st.warning("⚠️ GitHub não configurado corretamente em `st.secrets`.")
+    else:
+        historico = github_list_historico(token, repo)
+
+        if not historico:
+            st.info("Nenhum arquivo encontrado no histórico remoto ainda.")
+        else:
+            nomes = [f["nome"].replace(".xlsx", "") for f in historico]
+            st.markdown(f"📂 Total de análises armazenadas: **{len(nomes)}**")
+            selecao = st.multiselect("Selecione análises para comparar", nomes)
+
+            if len(selecao) >= 2:
+                dfs = []
+                for nome in selecao:
+                    caminho = f"historico_sadt/{nome}.xlsx"
+                    conteudo = github_get_file(token, repo, caminho)
+                    if conteudo:
+                        df_tmp = pd.read_excel(BytesIO(conteudo))
+                        df_tmp["Origem"] = nome
+                        dfs.append(df_tmp)
+
+                if dfs:
+                    df_comp = pd.concat(dfs)
+                    st.success(f"✅ {len(df_comp):,} registros combinados")
+
+                    col1, col2 = st.columns(2)
+
+                    # Total de exames por arquivo
+                    total_exames = df_comp.groupby("Origem")["PACIENTE_ID"].count().reset_index()
+                    fig_total = px.bar(
+                        total_exames,
+                        x="Origem", y="PACIENTE_ID",
+                        title="📈 Total de Exames por Análise",
+                        labels={"PACIENTE_ID": "Quantidade de Exames", "Origem": "Arquivo"},
+                        text_auto=True, template="plotly_white"
+                    )
+                    with col1:
+                        st.plotly_chart(fig_total, use_container_width=True)
+
+                    # Pacientes únicos
+                    pacientes = df_comp.groupby("Origem")["PACIENTE_ID"].nunique().reset_index()
+                    fig_pac = px.bar(
+                        pacientes,
+                        x="Origem", y="PACIENTE_ID",
+                        title="👥 Pacientes Únicos",
+                        labels={"PACIENTE_ID": "Pacientes", "Origem": "Arquivo"},
+                        text_auto=True, template="plotly_white"
+                    )
+                    with col2:
+                        st.plotly_chart(fig_pac, use_container_width=True)
+
+                    # Média de exames por paciente
+                    metricas = total_exames.merge(pacientes, on="Origem", suffixes=("_Exames", "_Pacientes"))
+                    metricas["Media"] = metricas["PACIENTE_ID_Exames"] / metricas["PACIENTE_ID_Pacientes"]
+                    fig_media = px.bar(
+                        metricas, x="Origem", y="Media", text_auto=True,
+                        title="📊 Média de Exames por Paciente",
+                        labels={"Media": "Média", "Origem": "Arquivo"}, template="plotly_white"
+                    )
+                    st.plotly_chart(fig_media, use_container_width=True)
+
+                    # Variação percentual de exames
+                    if len(metricas) > 1:
+                        metricas["Var_Exames_%"] = metricas["PACIENTE_ID_Exames"].pct_change() * 100
+                        fig_var = px.line(
+                            metricas, x="Origem", y="Var_Exames_%", markers=True,
+                            title="📉 Variação Percentual de Exames entre Períodos",
+                            labels={"Var_Exames_%": "% Variação", "Origem": "Arquivo"},
+                            template="plotly_white"
+                        )
+                        st.plotly_chart(fig_var, use_container_width=True)
+
     # ---------------------------
     # Dashboard Principal em Tabs
     # ---------------------------
@@ -1634,85 +1713,7 @@ if uploaded is not None:
         fig_utilizacao.add_hline(y=130, line_dash="dash", line_color="red", annotation_text="Sobrecarga")
         
         st.plotly_chart(fig_utilizacao, use_container_width=True)
-    
-    st.markdown("---")
-    st.markdown("## 📁 Histórico de Arquivos e Comparativos")
 
-    token = st.secrets.get("GITHUB_TOKEN")
-    repo = st.secrets.get("GITHUB_REPO")
-
-    if not token or not repo:
-        st.warning("⚠️ GitHub não configurado corretamente em `st.secrets`.")
-    else:
-        historico = github_list_historico(token, repo)
-
-        if not historico:
-            st.info("Nenhum arquivo encontrado no histórico remoto ainda.")
-        else:
-            nomes = [f["nome"].replace(".xlsx", "") for f in historico]
-            st.markdown(f"📂 Total de análises armazenadas: **{len(nomes)}**")
-            selecao = st.multiselect("Selecione análises para comparar", nomes)
-
-            if len(selecao) >= 2:
-                dfs = []
-                for nome in selecao:
-                    caminho = f"historico_sadt/{nome}.xlsx"
-                    conteudo = github_get_file(token, repo, caminho)
-                    if conteudo:
-                        df_tmp = pd.read_excel(BytesIO(conteudo))
-                        df_tmp["Origem"] = nome
-                        dfs.append(df_tmp)
-
-                if dfs:
-                    df_comp = pd.concat(dfs)
-                    st.success(f"✅ {len(df_comp):,} registros combinados")
-
-                    col1, col2 = st.columns(2)
-
-                    # Total de exames por arquivo
-                    total_exames = df_comp.groupby("Origem")["PACIENTE_ID"].count().reset_index()
-                    fig_total = px.bar(
-                        total_exames,
-                        x="Origem", y="PACIENTE_ID",
-                        title="📈 Total de Exames por Análise",
-                        labels={"PACIENTE_ID": "Quantidade de Exames", "Origem": "Arquivo"},
-                        text_auto=True, template="plotly_white"
-                    )
-                    with col1:
-                        st.plotly_chart(fig_total, use_container_width=True)
-
-                    # Pacientes únicos
-                    pacientes = df_comp.groupby("Origem")["PACIENTE_ID"].nunique().reset_index()
-                    fig_pac = px.bar(
-                        pacientes,
-                        x="Origem", y="PACIENTE_ID",
-                        title="👥 Pacientes Únicos",
-                        labels={"PACIENTE_ID": "Pacientes", "Origem": "Arquivo"},
-                        text_auto=True, template="plotly_white"
-                    )
-                    with col2:
-                        st.plotly_chart(fig_pac, use_container_width=True)
-
-                    # Média de exames por paciente
-                    metricas = total_exames.merge(pacientes, on="Origem", suffixes=("_Exames", "_Pacientes"))
-                    metricas["Media"] = metricas["PACIENTE_ID_Exames"] / metricas["PACIENTE_ID_Pacientes"]
-                    fig_media = px.bar(
-                        metricas, x="Origem", y="Media", text_auto=True,
-                        title="📊 Média de Exames por Paciente",
-                        labels={"Media": "Média", "Origem": "Arquivo"}, template="plotly_white"
-                    )
-                    st.plotly_chart(fig_media, use_container_width=True)
-
-                    # Variação percentual de exames
-                    if len(metricas) > 1:
-                        metricas["Var_Exames_%"] = metricas["PACIENTE_ID_Exames"].pct_change() * 100
-                        fig_var = px.line(
-                            metricas, x="Origem", y="Var_Exames_%", markers=True,
-                            title="📉 Variação Percentual de Exames entre Períodos",
-                            labels={"Var_Exames_%": "% Variação", "Origem": "Arquivo"},
-                            template="plotly_white"
-                        )
-                        st.plotly_chart(fig_var, use_container_width=True)
 
     # ---------------------------
     # Seção de Export Melhorada

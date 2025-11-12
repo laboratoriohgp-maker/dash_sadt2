@@ -290,51 +290,88 @@ def create_advanced_metrics_card(title, value, subtitle, delta=None, color="#1f7
 # ---------------------------
 # Upload e Processamento
 # ---------------------------
-uploaded = st.file_uploader(
-    "📂 **Selecione o arquivo Excel com dados radiológicos**",
-    type=["xlsx", "xls"],
-    help="Arquivo deve conter colunas: PACIENTE, DATA_REALIZACAO, EXAME, etc.",
-    key="file_upload"
+token = st.secrets.get("GITHUB_TOKEN")
+repo = st.secrets.get("GITHUB_REPO")
+
+st.markdown("## 📊 Upload e Processamento")
+
+opcao = st.radio(
+    "Escolha como deseja carregar os dados:",
+    ["📂 Novo arquivo", "☁️ Histórico (GitHub)"],
+    horizontal=True,
+    key="origem_dados"
 )
 
-if uploaded is not None:
-    # Carregamento com feedback visual
-    with st.spinner('🔄 Carregando e processando dados...'):
-        df_raw = load_excel(uploaded)
-    
-    # Sucesso no carregamento
-    st.success(f"✅ **Arquivo carregado com sucesso!** {uploaded.name} | **{len(df_raw):,}** registros")
+df_raw = None
+uploaded = None
 
-    st.markdown("### 💾 **Salvar Análise**")
-
-    nome_personalizado = st.text_input(
-        "Nome do arquivo (opcional)",
-        placeholder="Exemplo: 'Outubro_2025_RaioX_Tomografia'"
+if opcao == "📂 Novo arquivo":
+    uploaded = st.file_uploader(
+        "📂 **Selecione o arquivo Excel com dados radiológicos**",
+        type=["xlsx", "xls"],
+        help="Arquivo deve conter colunas: PACIENTE, DATA_REALIZACAO, EXAME, etc.",
+        key="file_upload"
     )
-    salvar_agora = st.button("💾 Salvar Análise", use_container_width=True)
 
-    if salvar_agora:
-        try:
-            token = st.secrets["GITHUB_TOKEN"]
-            repo = st.secrets["GITHUB_REPO"]
+    if uploaded is not None:
+        # Carregamento com feedback visual
+        with st.spinner('🔄 Carregando e processando dados...'):
+            df_raw = load_excel(uploaded)
+        
+        # Sucesso no carregamento
+        st.success(f"✅ **Arquivo carregado com sucesso!** {uploaded.name} | **{len(df_raw):,}** registros")
 
-            nome_final = nome_personalizado.strip() or datetime.now().strftime("%Y-%m-%d_%H-%M")
-            caminho_git = f"historico_sadt/{nome_final}.xlsx"
-            arquivo_bytes = uploaded.getvalue()
+        st.markdown("### 💾 **Salvar Análise**")
 
-            with st.spinner("⏫ Enviando análise para o GitHub..."):
-                status, resp = github_put_file(
-                    token, repo, caminho_git, arquivo_bytes, f"Nova análise adicionada: {nome_final}"
-                )
+        nome_personalizado = st.text_input(
+            "Nome do arquivo (opcional)",
+            placeholder="Exemplo: 'Outubro_2025_RaioX_Tomografia'"
+        )
+        salvar_agora = st.button("💾 Salvar Análise", use_container_width=True)
 
-            if status in [200, 201]:
-                st.success(f"✅ Arquivo salvo com sucesso! [Abrir no GitHub]({resp['content']['html_url']})")
-                st.session_state["atualizar_historico"] = True
-            else:
-                st.error(f"❌ Erro ao salvar: {resp.json().get('message', 'Falha desconhecida')}")
+        if salvar_agora:
+            try:
+                nome_final = nome_personalizado.strip() or datetime.now().strftime("%Y-%m-%d_%H-%M")
+                caminho_git = f"historico_sadt/{nome_final}.xlsx"
+                arquivo_bytes = uploaded.getvalue()
 
-        except KeyError:
-            st.error("⚠️ Token ou repositório GitHub não configurado em `st.secrets`.")
+                with st.spinner("⏫ Enviando análise para o GitHub..."):
+                    status, resp = github_put_file(
+                        token, repo, caminho_git, arquivo_bytes, f"Nova análise adicionada: {nome_final}"
+                    )
+
+                if status in [200, 201]:
+                    st.success(f"✅ Arquivo salvo com sucesso! [Abrir no GitHub]({resp['content']['html_url']})")
+                    st.session_state["atualizar_historico"] = True
+                else:
+                    st.error(f"❌ Erro ao salvar: {resp.json().get('message', 'Falha desconhecida')}")
+            except KeyError:
+                st.error("⚠️ Token ou repositório GitHub não configurado em `st.secrets`.")
+# ---------------------------
+# ☁️ HISTÓRICO (GitHub)
+# ---------------------------
+elif opcao == "☁️ Histórico (GitHub)":
+    if not token or not repo:
+        st.error("⚠️ Configuração do GitHub ausente. Verifique `st.secrets`.")
+    else:
+        with st.spinner("☁️ Carregando lista de arquivos no GitHub..."):
+            historico = github_list_historico(token, repo)
+
+        if not historico:
+            st.info("Nenhum arquivo encontrado no histórico remoto.")
+        else:
+            nomes_hist = [f["nome"].replace(".xlsx", "") for f in historico]
+            escolha = st.selectbox("Selecione um arquivo do histórico:", nomes_hist)
+
+            if escolha:
+                caminho = f"historico_sadt/{escolha}.xlsx"
+                with st.spinner(f"☁️ Carregando {escolha} do GitHub..."):
+                    conteudo = github_get_file(token, repo, caminho)
+                    if conteudo:
+                        df_raw = pd.read_excel(BytesIO(conteudo))
+                        st.success(f"✅ **{escolha}.xlsx** carregado do GitHub ({len(df_raw):,} registros)")
+                    else:
+                        st.error("❌ Falha ao carregar o arquivo do histórico.")
 
     # Expander para visualizar dados brutos
     with st.expander("🔍 **Visualizar dados brutos**", expanded=False):
@@ -2130,6 +2167,7 @@ else:
         <p style="font-size: 1.1em;">Faça upload do seu arquivo Excel usando o botão acima e descubra insights valiosos sobre seu centro radiológico!</p>
     </div>
     """, unsafe_allow_html=True)
+
 
 
 

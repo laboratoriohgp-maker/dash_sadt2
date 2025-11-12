@@ -322,12 +322,12 @@ if uploaded is not None:
             "Nome do arquivo (ex: 'Outubro 2025 - Tomografias')",
             placeholder="Se deixar em branco, será usado o nome pela data"
         )
-     with col2:
-         repo = st.text_input("📁 Repositório GitHub (ex: usuario/repositorio)", key="repo_input")
-     with col3:
-         token = st.text_input("🔑 Token GitHub", type="password", key="token_input")
+    with col2:
+        repo = st.text_input("📁 Repositório GitHub (ex: usuario/repositorio)", key="repo_input")
+    with col3:
+        token = st.text_input("🔑 Token GitHub", type="password", key="token_input")
 
-     salvar_github = st.button("💾 Salvar no GitHub", use_container_width=True)
+    salvar_github = st.button("💾 Salvar no GitHub", use_container_width=True)
 
     if salvar_github and uploaded and repo and token:
         nome_final = nome_personalizado.strip() or datetime.now().strftime("%Y-%m-%d_%H-%M")
@@ -2142,4 +2142,5 @@ else:
         <p style="font-size: 1.1em;">Faça upload do seu arquivo Excel usando o botão acima e descubra insights valiosos sobre seu centro radiológico!</p>
     </div>
     """, unsafe_allow_html=True)
+
 
